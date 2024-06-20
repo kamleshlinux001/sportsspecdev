@@ -1851,3 +1851,94 @@ function set_default_page_template($post_ID, $post, $update) {
     }
 }
 add_action('wp_insert_post', 'set_default_page_template', 10, 3);
+
+// AJAX handler to load more related posts
+add_action('wp_ajax_load_more_related_posts', 'load_more_related_posts');
+add_action('wp_ajax_nopriv_load_more_related_posts', 'load_more_related_posts');
+
+function load_more_related_posts() {
+    $post_id = intval($_POST['post_id']);
+    $page = intval($_POST['page']);
+
+    $categories = get_the_category($post_id);
+
+    if ($categories) {
+        $category_ids = wp_list_pluck($categories, 'term_id');
+
+        $args = array(
+            'category__in' => $category_ids,
+            'post__not_in' => array($post_id), // Exclude the current post
+            'posts_per_page' => 2, // Number of related posts to load per page
+            'orderby' => 'date', // Order by date of publication
+            'paged' => $page,
+        );
+
+        $related_query = new WP_Query($args);
+
+        if ($related_query->have_posts()) {
+            while ($related_query->have_posts()) {
+                $related_query->the_post();
+                ?>
+                <div id="post-<?php the_ID(); ?>" <?php post_class('outer-wrapper single_post single-sport new_container'); ?>>
+                    <div class="post_inner_content">
+                        <div class="post_blog">
+                            <div class="post_data">
+                                <div class="left_post_data">
+                                    <span class="post_category">
+                                        <?php
+                                        $related_categories = wp_get_post_terms(get_the_ID(), 'category', array('order' => 'ASC', 'fields' => 'all'));
+                                        foreach ($related_categories as $related_category) {
+                                            $related_term_link = get_term_link($related_category);
+                                            ?>
+                                            <a href="<?php echo esc_url($related_term_link); ?>">
+                                                <span class="post_category_<?php echo esc_attr($related_category->name); ?>">
+                                                    <?php echo esc_html($related_category->name); ?>
+                                                </span>
+                                            </a>
+                                            <?php
+                                        }
+                                        ?>
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="line"></div>
+                            <h2><?php echo esc_html(get_the_title()); ?></h2>
+                            <?php
+                            $related_author_id = get_the_author_meta('ID');
+                            $related_author_url = get_author_posts_url($related_author_id);
+                            ?>
+                            <span class="post_author"><?php echo "By <a href='" . esc_url($related_author_url) . "'><span>" . esc_html(get_the_author()) . "</span></a>"; ?></span>
+                            <span class="post_date"><?php echo esc_html(get_the_date('M j, Y')); ?></span>
+                            <div class="post_all_content">
+                                <?php
+                                $related_post_format = get_post_format();
+                                $related_post_thumbnail_id = get_post_thumbnail_id();
+                                $related_post_img_url = wp_get_attachment_url($related_post_thumbnail_id);
+
+                                if ($related_post_format != 'video' || !$related_post_video) {
+                                    ?>
+                                    <div class="a_post_img_class image" style="background-image:url(<?php echo esc_url($related_post_img_url); ?>);"></div>
+                                    <?php
+                                } else {
+                                    // Handle video format if needed
+                                }
+
+                                // Display related post content
+                                $related_post_content = apply_filters('the_content', get_the_content());
+                                echo '<div class="text">' . $related_post_content . '</div>';
+
+                                // Display tags if available
+                                the_tags('<div id="pao-tags-content-wrapper"><h3 class="pao-tags-pre">Tags:</h3><ul class="pao-post-tags-wrapper"><li class="pao-post-tag">', '<span class="pao-tag-comma">, </span></li><li class="pao-post-tag">', '</li></ul></div>');
+                                ?>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <?php
+            }
+        }
+        wp_reset_postdata();
+    }
+
+    wp_die();
+}
